@@ -76,3 +76,5 @@ class PokeBattle_Battle
     @furfrou_roar = nil
   end
 end
+
+TextureOverrides.registerTextureOverride(TextureOverrides::ICONS + "furfroucrest", TextureOverrides::MODBASE + "furfroucrest")
