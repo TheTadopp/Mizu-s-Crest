@@ -5,18 +5,22 @@
 # - Self-inflict burn on battle entry
 # - Burn heals 1/8 HP per turn instead of dealing damage
 # - Normal-type STAB (stacks with original STAB)
+# - Normal moves become Fire type
+# - All moves scale off Attack stat instead of SpAtk
 # ===========================================
 
 PBStuff::POKEMONTOCREST[:FLAREON] = :FLAREONCREST
 
 $cache.items[:FLAREONCREST] = ItemData.new(:FLAREONCREST, {
   name: "Flareon Crest",
-  desc: "A crest burning with passion. Boosts Speed, grants Normal STAB, and heals burn damage.",
+  desc: "A crest burning with passion. Boosts Speed, grants Normal STAB, heals burn, and channels all power through physical Attack.",
   price: 0,
   crest: true,
   noUseInBattle: true,
   noUse: true,
 })
+
+TextureOverrides.registerTextureOverride(TextureOverrides::ICONS + "flareoncrest", TextureOverrides::MODBASE + "flareoncrest")
 
 
 class PokeBattle_Battler
@@ -76,12 +80,39 @@ end
 
 
 class PokeBattle_Move
+  alias :flareon_crest_old_pbType :pbType
+  def pbType(attacker, type=@type)
+    type = flareon_crest_old_pbType(attacker, type)
+    if attacker.crested == :FLAREON && type == :NORMAL && (attacker.ability == :FLASHFIRE || attacker.ability == :GUTS)
+      type = :FIRE
+    end
+    return type
+  end
+end
+
+
+class PokeBattle_Move
   alias :flareon_crest_old_calc_damage :pbCalcDamage
   def pbCalcDamage(attacker, opponent, options=0, hitnum: 0)
-    damage = flareon_crest_old_calc_damage(attacker, opponent, options, hitnum: hitnum)
-    if attacker.crested == :FLAREON && pbType(attacker) == :NORMAL
-      damage *= 1.5
+    if attacker.crested == :FLAREON && attacker.ability == :FLASHFIRE
+      # Swap spatk with attack so special moves use Attack stat
+      orig_spatk = attacker.spatk
+      orig_stages_spatk = attacker.stages[PBStats::SPATK]
+      attacker.spatk = attacker.attack
+      attacker.stages[PBStats::SPATK] = attacker.stages[PBStats::ATTACK]
+      # Nullify burn so Attack debuff doesn't apply
+      orig_status = attacker.status
+      attacker.status = nil if attacker.status == :BURN
     end
+
+    damage = flareon_crest_old_calc_damage(attacker, opponent, options, hitnum: hitnum)
+
+    if attacker.crested == :FLAREON && attacker.ability == :FLASHFIRE
+      attacker.spatk = orig_spatk
+      attacker.stages[PBStats::SPATK] = orig_stages_spatk
+      attacker.status = orig_status if defined?(orig_status)
+    end
+
     return damage
   end
 end
